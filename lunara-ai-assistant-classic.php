@@ -46,7 +46,7 @@ final class Lunara_AI_Assistant_Classic {
 	public static function default_settings() {
 		return array(
 			'api_key'           => '',
-			'model'             => 'gpt-5.5',
+			'model'             => 'gpt-4o',
 			'anthropic_api_key' => '',
 			'anthropic_model'   => 'claude-sonnet-4-20250514',
 			'gemini_api_key'    => '',
