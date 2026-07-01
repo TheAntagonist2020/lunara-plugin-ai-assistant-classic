@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       LUNARA AI Assistant Classic
  * Description:       Private LUNARA editorial assistant for the Classic Editor, including Journal and Review post types.
- * Version:           0.4.0
+ * Version:           0.5.0
  * Author:            LUNARA FILM
  * Requires at least: 6.3
  * Requires PHP:      7.4
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.4.0' );
+define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.5.0' );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_FILE', __FILE__ );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_URL', plugin_dir_url( __FILE__ ) );
@@ -48,7 +48,7 @@ final class Lunara_AI_Assistant_Classic {
 			'api_key'           => '',
 			'model'             => 'gpt-4o',
 			'anthropic_api_key' => '',
-			'anthropic_model'   => 'claude-sonnet-4-20250514',
+			'anthropic_model'   => 'claude-sonnet-5',
 			'gemini_api_key'    => '',
 			'gemini_model'      => 'gemini-2.0-flash',
 			'post_types'        => 'post,journal,review',
@@ -915,7 +915,7 @@ final class Lunara_AI_Assistant_Classic {
 				'body'    => wp_json_encode(
 					array(
 						'model'      => $model,
-						'max_tokens' => 1800,
+						'max_tokens' => 4096,
 						'system'     => $system_prompt,
 						'messages'   => array(
 							array(
