@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       LUNARA AI Assistant Classic
  * Description:       Private LUNARA editorial assistant for the Classic Editor, including Journal and Review post types.
- * Version:           0.4.0
+ * Version:           0.6.0
  * Author:            LUNARA FILM
  * Requires at least: 6.3
  * Requires PHP:      7.4
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.4.0' );
+define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.6.0' );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_FILE', __FILE__ );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_URL', plugin_dir_url( __FILE__ ) );
@@ -45,10 +45,11 @@ final class Lunara_AI_Assistant_Classic {
 	 */
 	public static function default_settings() {
 		return array(
+			'provider'          => 'auto',
 			'api_key'           => '',
-			'model'             => 'gpt-5.5',
+			'model'             => 'gpt-4o',
 			'anthropic_api_key' => '',
-			'anthropic_model'   => 'claude-sonnet-4-20250514',
+			'anthropic_model'   => 'claude-sonnet-5',
 			'gemini_api_key'    => '',
 			'gemini_model'      => 'gemini-2.0-flash',
 			'post_types'        => 'post,journal,review',
@@ -148,6 +149,65 @@ final class Lunara_AI_Assistant_Classic {
 	}
 
 	/**
+	 * Supported providers.
+	 *
+	 * @return array
+	 */
+	private static function providers() {
+		return array( 'openai', 'anthropic', 'gemini' );
+	}
+
+	/**
+	 * Whether the provider is explicitly pinned (not "Automatic").
+	 *
+	 * @return bool
+	 */
+	private static function provider_is_pinned() {
+		$settings = self::get_settings();
+		$choice   = isset( $settings['provider'] ) ? sanitize_key( (string) $settings['provider'] ) : 'auto';
+		return in_array( $choice, self::providers(), true );
+	}
+
+	/**
+	 * Resolve the provider that should handle a request.
+	 *
+	 * An explicit choice in Settings drives every request, so a single key is
+	 * enough to run the assistant. "Automatic" picks the first provider that has
+	 * a key configured, preferring Claude.
+	 *
+	 * @return string openai|anthropic|gemini
+	 */
+	private static function get_active_provider() {
+		if ( self::provider_is_pinned() ) {
+			$settings = self::get_settings();
+			return sanitize_key( (string) $settings['provider'] );
+		}
+
+		foreach ( array( 'anthropic', 'openai', 'gemini' ) as $candidate ) {
+			if ( '' !== self::get_provider_api_key( $candidate ) ) {
+				return $candidate;
+			}
+		}
+
+		return 'anthropic';
+	}
+
+	/**
+	 * Human-readable provider label for UI and error messages.
+	 *
+	 * @param string $provider Provider key.
+	 * @return string
+	 */
+	private static function provider_label( $provider ) {
+		$labels = array(
+			'openai'    => __( 'OpenAI', 'lunara-ai-assistant-classic' ),
+			'anthropic' => __( 'Anthropic (Claude)', 'lunara-ai-assistant-classic' ),
+			'gemini'    => __( 'Google Gemini', 'lunara-ai-assistant-classic' ),
+		);
+		return isset( $labels[ $provider ] ) ? $labels[ $provider ] : ucfirst( (string) $provider );
+	}
+
+	/**
 	 * Default LUNARA editorial prompt.
 	 *
 	 * @return string
@@ -219,7 +279,13 @@ final class Lunara_AI_Assistant_Classic {
 		$existing = self::get_settings();
 		$input    = is_array( $input ) ? $input : array();
 
+		$provider = isset( $input['provider'] ) ? sanitize_key( wp_unslash( $input['provider'] ) ) : $defaults['provider'];
+		if ( ! in_array( $provider, array( 'auto', 'openai', 'anthropic', 'gemini' ), true ) ) {
+			$provider = $defaults['provider'];
+		}
+
 		return array(
+			'provider'          => $provider,
 			'api_key'           => self::sanitize_secret_setting( $input, 'api_key', 'clear_api_key', $existing ),
 			'model'             => isset( $input['model'] ) ? sanitize_text_field( wp_unslash( $input['model'] ) ) : $defaults['model'],
 			'anthropic_api_key' => self::sanitize_secret_setting( $input, 'anthropic_api_key', 'clear_anthropic_api_key', $existing ),
@@ -272,6 +338,26 @@ final class Lunara_AI_Assistant_Classic {
 			<form method="post" action="options.php">
 				<?php settings_fields( 'lunara_ai_assistant_classic_group' ); ?>
 				<table class="form-table" role="presentation">
+					<?php $active_provider = self::get_active_provider(); ?>
+					<tr>
+						<th scope="row"><label for="lunara-classic-provider"><?php esc_html_e( 'AI provider', 'lunara-ai-assistant-classic' ); ?></label></th>
+						<td>
+							<select id="lunara-classic-provider" name="<?php echo esc_attr( self::OPTION_KEY ); ?>[provider]">
+								<option value="auto" <?php selected( $settings['provider'], 'auto' ); ?>><?php esc_html_e( 'Automatic (use whichever key is set — Claude preferred)', 'lunara-ai-assistant-classic' ); ?></option>
+								<option value="anthropic" <?php selected( $settings['provider'], 'anthropic' ); ?>><?php esc_html_e( 'Anthropic (Claude)', 'lunara-ai-assistant-classic' ); ?></option>
+								<option value="openai" <?php selected( $settings['provider'], 'openai' ); ?>><?php esc_html_e( 'OpenAI', 'lunara-ai-assistant-classic' ); ?></option>
+								<option value="gemini" <?php selected( $settings['provider'], 'gemini' ); ?>><?php esc_html_e( 'Google Gemini', 'lunara-ai-assistant-classic' ); ?></option>
+							</select>
+							<p class="description">
+								<?php esc_html_e( 'Pick which service powers the assistant. Choosing one provider routes every task to it, so a single API key is enough. "Automatic" uses smart per-task routing when several keys are set and otherwise falls back to whichever key you have.', 'lunara-ai-assistant-classic' ); ?>
+								<br />
+								<strong><?php echo esc_html( sprintf( /* translators: %s: provider name */ __( 'Currently active: %s', 'lunara-ai-assistant-classic' ), self::provider_label( $active_provider ) ) ); ?></strong>
+								<?php if ( '' === self::get_provider_api_key( $active_provider ) ) : ?>
+									<span style="color:#b32d2e;"><?php esc_html_e( '— no API key set for this provider yet.', 'lunara-ai-assistant-classic' ); ?></span>
+								<?php endif; ?>
+							</p>
+						</td>
+					</tr>
 					<?php
 					self::render_secret_row(
 						'api_key',
@@ -543,9 +629,15 @@ final class Lunara_AI_Assistant_Classic {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function rest_generate( WP_REST_Request $request ) {
-		$api_key = self::get_provider_api_key( 'openai' );
+		$provider = self::get_active_provider();
+		$api_key  = self::get_provider_api_key( $provider );
 		if ( ! $api_key ) {
-			return new WP_Error( 'lunara_missing_key', __( 'OpenAI API key is missing. Add it under Settings > LUNARA AI Classic.', 'lunara-ai-assistant-classic' ), array( 'status' => 400 ) );
+			return new WP_Error( 'lunara_missing_key', sprintf( /* translators: %s: provider name */ __( '%s API key is missing. Add it under Settings > LUNARA AI Classic.', 'lunara-ai-assistant-classic' ), self::provider_label( $provider ) ), array( 'status' => 400 ) );
+		}
+
+		$model = self::get_provider_model( $provider );
+		if ( ! $model ) {
+			return new WP_Error( 'lunara_missing_provider_model', sprintf( /* translators: %s: provider name */ __( '%s model is missing. Set it under Settings > LUNARA AI Classic.', 'lunara-ai-assistant-classic' ), self::provider_label( $provider ) ), array( 'status' => 400 ) );
 		}
 
 		$mode           = sanitize_key( $request->get_param( 'mode' ) );
@@ -557,7 +649,7 @@ final class Lunara_AI_Assistant_Classic {
 		$reference_text = wp_strip_all_tags( (string) $request->get_param( 'referenceText' ) );
 		$notes          = wp_strip_all_tags( (string) $request->get_param( 'notes' ) );
 		$user_prompt    = self::build_user_prompt( $mode, $post_type, $film_title, $film_year, $post_title, $post_content, $reference_text, $notes );
-		$result         = self::request_provider_text( 'openai', self::get_provider_model( 'openai' ), $api_key, self::get_settings()['system_prompt'], $user_prompt );
+		$result         = self::request_provider_text( $provider, $model, $api_key, self::get_settings()['system_prompt'], $user_prompt );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -645,15 +737,25 @@ final class Lunara_AI_Assistant_Classic {
 	 * @return string
 	 */
 	private static function provider_for_intent( $intent ) {
+		// An explicit provider choice drives every task, so one key is enough.
+		if ( self::provider_is_pinned() ) {
+			return self::get_active_provider();
+		}
+
+		// Automatic: prefer a per-task model, but only when its key is set;
+		// otherwise fall back to whichever provider key is configured.
+		$preferred = 'openai';
 		if ( in_array( $intent, array( 'rewrite', 'readiness' ), true ) ) {
-			return 'anthropic';
+			$preferred = 'anthropic';
+		} elseif ( 'ledger_links' === $intent ) {
+			$preferred = 'gemini';
 		}
 
-		if ( 'ledger_links' === $intent ) {
-			return 'gemini';
+		if ( '' !== self::get_provider_api_key( $preferred ) ) {
+			return $preferred;
 		}
 
-		return 'openai';
+		return self::get_active_provider();
 	}
 
 	/**
@@ -915,7 +1017,7 @@ final class Lunara_AI_Assistant_Classic {
 				'body'    => wp_json_encode(
 					array(
 						'model'      => $model,
-						'max_tokens' => 1800,
+						'max_tokens' => 4096,
 						'system'     => $system_prompt,
 						'messages'   => array(
 							array(
