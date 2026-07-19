@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       LUNARA AI Assistant Classic
  * Description:       Private LUNARA editorial assistant for the Classic Editor, including Journal and Review post types.
- * Version:           0.6.0
+ * Version:           0.6.1
  * Author:            LUNARA FILM
  * Requires at least: 6.3
  * Requires PHP:      7.4
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.6.0' );
+define( 'LUNARA_AI_ASSISTANT_CLASSIC_VERSION', '0.6.1' );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_FILE', __FILE__ );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'LUNARA_AI_ASSISTANT_CLASSIC_URL', plugin_dir_url( __FILE__ ) );
@@ -1056,7 +1056,7 @@ final class Lunara_AI_Assistant_Classic {
 	 */
 	private static function request_gemini_text( $model, $api_key, $system_prompt, $user_prompt ) {
 		$model = preg_replace( '#^models/#', '', trim( $model ) );
-		$url   = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode( $model ) . ':generateContent?key=' . rawurlencode( $api_key );
+		$url   = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode( $model ) . ':generateContent';
 
 		$response = wp_remote_post(
 			$url,
@@ -1064,6 +1064,7 @@ final class Lunara_AI_Assistant_Classic {
 				'timeout' => 60,
 				'headers' => array(
 					'Content-Type' => 'application/json',
+					'x-goog-api-key' => $api_key,
 				),
 				'body'    => wp_json_encode(
 					array(
